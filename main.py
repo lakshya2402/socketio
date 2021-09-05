@@ -230,6 +230,12 @@ def handle_join_room_event(data):
     socketio.emit('join_room_announcement', data, room=data['room'])
 
 
+@socketio.on('typing')
+def handle_join_room_event(data):
+    app.logger.info("{} is typing in room {}".format(data['username'], data['room'], data['accountType']))
+    socketio.emit('person_typing', data, room=data['room'])
+
+
 @socketio.on('leave_room')
 def handle_leave_room_event(data):
     app.logger.info("{} has left the room {}".format(data['username'], data['room'], data['accountType']))

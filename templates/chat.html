@@ -12,6 +12,7 @@
 
 <form id="message_input_form">
     <input type="text" id="message_input" placeholder="Enter your message here">
+    <p id="istyping"></p>
     <button type="submit">Send</button>
 </form>
 </body>
@@ -74,5 +75,25 @@
         newNode.innerHTML = `<b>${data.username}</b> has left the room`;
         document.getElementById('messages').appendChild(newNode);
     });
+
+    var message = document.getElementById('message_input');
+    var istyping = document.getElementById('istyping')
+    var timeout  = setTimeout(function(){}, 0)
+    message.addEventListener('keypress', function(){
+          clearTimeout(timeout);
+        istyping.innerHTML = 'typing'
+        timeout = setTimeout(socket.emit('typing', {
+            username: "{{ username }}",
+            room: "{{ room }}",
+            accountType: "{{ accountType }}"
+        }), 1000)
+    });
+        socket.on('person_typing', function (data) {
+        console.log(data);
+        const newNode = document.createElement('div');
+        newNode.innerHTML = `<b>${data.username}</b> is typing`;
+        document.getElementById('istyping').appendChild(newNode);
+    });
+
 </script>
 </html>
