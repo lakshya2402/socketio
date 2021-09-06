@@ -1,6 +1,6 @@
 from asyncio.log import logger
 
-from pymongo import MongoClient
+from pymongo import MongoClient, WriteConcern
 from pymongo import ReadPreference
 import re
 import time
@@ -46,7 +46,8 @@ class MongoConfig:
 
     def insert(self, database, collection, document):
         try:
-            return self.get_db(database).get_collection(collection).insert_one(document)
+            return self.get_db(database).get_collection(collection).with_options(
+                write_concern=WriteConcern(w="majority", j=True)).insert_one(document)
         except Exception as e:
             if self.not_master.search(e.__str__()):
                 logger.warning("######## primary node not found ########")
@@ -63,7 +64,8 @@ class MongoConfig:
 
     def update(self, database, collection, filter, update):
         try:
-            return self.get_db(database).get_collection(collection).update_one(filter, update)
+            return self.get_db(database).get_collection(collection).with_options(
+                write_concern=WriteConcern(w="majority", j=True)).update_one(filter, update)
 
         except Exception as e:
             if self.not_master.search(e.__str__()):
