@@ -5,7 +5,7 @@ from pymongo import ReadPreference
 import re
 import time
 
-keysInformation ={"mongodb.auth.enabled": 'false'}
+from utils.properties import keysInformation
 
 
 class MongoConfig:
@@ -14,10 +14,7 @@ class MongoConfig:
         if keysInformation["mongodb.auth.enabled"] == 'true':
             if not hasattr(cls, 'instance'):
                 cls.instance = super(MongoConfig, cls).__new__(cls)
-                cls.instance.client = MongoClient(keysInformation["mongodb.server.url"],
-                                                  username=keysInformation["mongodb.database.username.admin"],
-                                                  password=keysInformation["mongodb.database.password.admin"],
-                                                  authSource='admin', read_preference=ReadPreference.PRIMARY_PREFERRED)
+                cls.instance.client = MongoClient(keysInformation["mongodb.server.url"])
             return cls.instance
         else:
             if not hasattr(cls, 'instance'):
@@ -34,10 +31,7 @@ class MongoConfig:
         for repeat in range(4):
             time.sleep(timer)
             self.instance.client.close()
-            self.instance.client = MongoClient('mongodb://' + keysInformation["mongodb.server.url"],
-                                               username=keysInformation["mongodb.database.username.admin"],
-                                               password=keysInformation["mongodb.database.password.admin"],
-                                               authSource='admin', read_preference=ReadPreference.PRIMARY_PREFERRED)
+            self.instance.client = MongoClient(keysInformation["mongodb.server.url"])
             timer = timer * 2
             return self.instance.client
 
