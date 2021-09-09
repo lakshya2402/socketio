@@ -22,7 +22,7 @@ Path(UPLOAD_FOLDER).mkdir(parents=True, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 app = Flask(__name__)
-socketio = SocketIO(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 
 @app.route('/')
@@ -42,10 +42,9 @@ def chat():
         return redirect(url_for('home'))
 
 
-@app.route('/create_chatroom', methods=['POST', 'GET'])
+@app.route('/create_chatroom', methods=['POST'])
 def create_chatroom():
     if request.method == "POST":
-        # socket,
         try:
             room_id: str = request.form.get("chatroomId")
             if room_id is None:
@@ -67,24 +66,10 @@ def create_chatroom():
                            "messages": []}
                 update_chatroom_chats(room_id, to_save)
                 MongoConfig().insert(DB_name, room_id, to_save)
-                # template = get_template("index.html")
-                # form = ChatRoom()
-                # return return_response(to_save, "Success", code=200)
-                # return make_response({"form": to_save})
-                return render_template('chat.html', username=doctor, room=room_id)
+                return return_response(to_save, "Success", code=200)
         except Exception as e:
             print(f"error due to {e}")
             return_response({"error": f"e"}, f"e", 400)
-    else:
-        room_id: str = request.args.get("chatroomId")
-        doctor: str = request.args.get("doctorId")
-        client: str = request.args.get("clientId")
-        if room_id and doctor:
-            return render_template('chat.html', username=doctor, room=room_id)
-        elif room_id and client:
-            return render_template('chat.html', username=client, room=room_id)
-        # else:
-        #     return redirect(url_for('home'))
 
 
 @app.route('/update_message', methods=['POST'])
