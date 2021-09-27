@@ -6,7 +6,7 @@ from paho.mqtt import client as mqtt
 from prevous_chat import get_previous_chat
 from utils.properties import USERNAME, PASSWORD, MQTT_KEEPALIVE, MQTT_HOST, MQTT_PORT
 
-post_response = "chatRoom/post/{}"
+post_response = "chatRoom/post/{}/{}"
 get_request = "chatRoom/get/#"
 
 
@@ -31,11 +31,14 @@ class MqttClient:
         logger.error("################ Something is wrong with mqtt publisher################ {}".format(e))
 
 
-def send_response(response, room_id):
+def send_response(response, room_id, user_id, get_msg=False):
     mqtt_client_publish = MqttClient().clientMqtt()
     print(f"to find: {response}")
-    data = get_previous_chat(response.get("count"), room_id, response.get("userId"))
-    mqtt_client_publish.publish(topic=post_response.format(room_id),
+    if get_msg:
+        data = get_previous_chat(response.get("count"), room_id, user_id)
+    else:
+        data = response
+    mqtt_client_publish.publish(topic=post_response.format(room_id, user_id),
                                 payload=json.dumps(data))
 
 
@@ -43,7 +46,8 @@ def on_message(client, userdata, msg):
     print("Message received-> " + msg.topic + " " + str(msg.payload))
     room_id = str(msg.topic).split("/")[-1]
     print("the message = ", json.loads(msg.payload.decode("utf-8", "ignore")))
-    send_response(json.loads(msg.payload.decode("utf-8", "ignore")), room_id)
+    response = json.loads(msg.payload.decode("utf-8", "ignore"))
+    send_response(response, room_id, response.get("userId"), get_msg=True)
     print("Message received-> " + msg.topic + " " + str(msg.payload))
 
 
@@ -52,7 +56,6 @@ def run_mqtt():
     mqtt_client_subscribe.subscribe(topic=get_request)
     mqtt_client_subscribe.on_message = on_message
     mqtt_client_subscribe.loop_start()
-
 
 # mosquitto_pub -h localhost -t chatRoom/get/ -u root -P cool  -m "{\"value1\":20,\"value2\":40}"
 # mosquitto_sub -h localhost -t chatRoom/post/# -u root -P cool

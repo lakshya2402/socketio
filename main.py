@@ -46,12 +46,12 @@ def home():
 
 @app.route('/chat')
 def chat():
-    username = request.args.get('username')
+    userId = request.args.get('userId')
     room = request.args.get('room')
     account = request.args.get('accountType')
 
-    if username and room:
-        return render_template('chat.html', username=username, room=room, accountType=account)
+    if userId and room:
+        return render_template('chat.html', userId=userId, room=room, accountType=account)
     else:
         return redirect(url_for('home'))
 
@@ -151,7 +151,7 @@ def get_chat():
 
 @socketio.on('send_message')
 def handle_send_message_event(data):
-    app.logger.info("{} has sent message to the room {}: {}".format(data['username'],
+    app.logger.info("{} has sent message to the room {}: {}".format(data['userId'],
                                                                     data['room'],
                                                                     data['message']))
 
@@ -160,13 +160,11 @@ def handle_send_message_event(data):
             room_id: str = data.get("room")
             if room_id is None:
                 send_response(error_message("ROOM_ID MISMATCH", "SEND_MESSAGE", "room id does not exist", 400),
-                              data['room'])
-                return return_response({}, "room id is none", 400)
-            sender: str = data.get("username")
+                              data['room'], data['userId'])
+            sender: str = data.get("userId")
             if sender is None:
                 send_response(error_message("SENDER_ID MISMATCH", "SEND_MESSAGE", "sender id does not exist", 400),
-                              data['room'])
-                return return_response({}, "senderId is none", 400)
+                              data['room'], data['userId'])
             chat = get_chatroom_chats(room_id)
             if chat is None:
                 chat = MongoConfig().find(DB_name, room_id, {"chatroomId": room_id})
@@ -186,17 +184,17 @@ def handle_send_message_event(data):
                 socketio.emit('receive_message', data, room=data['room'])
         except Exception as e:
             send_response(error_message(e.__str__(), "SEND_MESSAGE", "Something went wrong broken pipeline"),
-                          data['room'])
+                          data['room'], data['userId'])
 
 
 @socketio.on('join_room')
 def handle_join_room_event(data):
-    app.logger.info("{} has joined the room {}".format(data['username'], data['room'], data['accountType']))
+    app.logger.info("{} has joined the room {}".format(data['userId'], data['room'], data['accountType']))
     try:
         a = 10 / 0
         to_search = {"chatroomId": data.get("room")}
         if data['accountType'] == "doctor":
-            to_search["doctorId"] = data['username']
+            to_search["doctorId"] = data['userId']
             if to_search.get("doctorId") is not None:
                 if MongoConfig().find(DB_name, data.get("room"), to_search) is not None:
                     MongoConfig().update(DB_name, data.get("room"),
@@ -206,20 +204,20 @@ def handle_join_room_event(data):
                     socketio.emit('join_room_announcement', data, room=data['room'])
                 else:
                     send_response(error_message("ROOM_ID MISMATCH", "JOIN_ROOM", "room id does not exist", 400),
-                                  data['room'])
+                                  data['room'], data['userId'])
                     logger.info(" room id does not exist")
         elif data['accountType'] == "client":
-            to_search["clientId"] = data['username']
+            to_search["clientId"] = data['userId']
             if MongoConfig().find(DB_name, data.get("room"), to_search) is not None:
                 join_room(data['room'])
                 socketio.emit('join_room_announcement', data, room=data['room'])
             else:
                 send_response(error_message("ROOM_ID MISMATCH", "JOIN_ROOM", "room id does not exist", 400),
-                              data['room'])
+                              data['room'], data['userId'])
                 logger.info(" room id does not exist")
         else:
             send_response(error_message("ACCOUNT TYPE MISMATCH", "JOIN_ROOM", "accountType does not match", 400),
-                          data['room'])
+                          data['room'], data['userId'])
             logger.info("accountType does not match")
     except Exception as e:
         send_response(error_message(e.__str__(), "JOIN_ROOM", "Something went wrong broken pipeline"), data['room'])
@@ -227,22 +225,22 @@ def handle_join_room_event(data):
 
 @socketio.on('typing')
 def handle_join_room_event(data):
-    app.logger.info("{} is typing in room {}".format(data['username'], data['room'], data['accountType']))
+    app.logger.info("{} is typing in room {}".format(data['userId'], data['room'], data['accountType']))
     if MongoConfig().find(DB_name, data.get("room"), {"chatroomId": data.get("room")}) is not None:
         socketio.emit('person_typing', data, room=data['room'])
     else:
-        send_response(error_message("ROOM_ID MISMATCH", "TYPING", "room does not exist", 400), data['room'])
+        send_response(error_message("ROOM_ID MISMATCH", "TYPING", "room does not exist", 400), data['room'], data['userId'])
         logger.info("room does not exist")
 
 
 @socketio.on('leave_room')
 def handle_leave_room_event(data):
-    app.logger.info("{} has left the room {}".format(data['username'], data['room'], data['accountType']))
+    app.logger.info("{} has left the room {}".format(data['userId'], data['room'], data['accountType']))
     try:
         print("leave room")
         to_search = {"chatroomId": data.get("room")}
         if data['accountType'] == "doctor":
-            to_search["doctorId"] = data['username']
+            to_search["doctorId"] = data['userId']
             if to_search.get("doctorId") is not None:
                 if MongoConfig().find(DB_name, data.get("room"), to_search) is not None:
                     MongoConfig().update(DB_name, data.get("room"), to_search,
@@ -251,20 +249,20 @@ def handle_leave_room_event(data):
                     socketio.emit('leave_room_announcement', data, room=data['room'])
                 else:
                     send_response(error_message("ROOM_ID MISMATCH", "LEAVE_ROOM", "room id does not exist", 400),
-                                  data['room'])
+                                  data['room'], data['userId'])
                     logger.info(" room id does not exist")
         elif data['accountType'] == "client":
-            to_search["clientId"] = data['username']
+            to_search["clientId"] = data['userId']
             if MongoConfig().find(DB_name, data.get("room"), to_search) is not None:
                 leave_room(data['room'])
                 socketio.emit('leave_room_announcement', data, room=data['room'])
             else:
                 send_response(error_message("ROOM_ID MISMATCH", "LEAVE_ROOM", "room id does not exist", 400),
-                              data['room'])
+                              data['room'], data['userId'])
                 logger.info("room id does not exist")
         else:
             send_response(error_message("ACCOUNT TYPE MISMATCH", "LEAVE_ROOM", "accountType does not match", 400),
-                          data['room'])
+                          data['room'], data['userId'])
             logger.info("accountType does not match")
     except Exception as e:
         send_response(error_message(e.__str__(), "LEAVE_ROOM", "Something went wrong broken pipeline"), data['room'])
