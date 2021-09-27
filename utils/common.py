@@ -41,6 +41,15 @@ def translate_message_for_mongo(userId, message):
     return translateMessage(userId, message, 'encrypt')
 
 
+def error_message(error, target, message, code=500):
+    return {"status_code": code,
+            "content": {"error": {"message": message,
+                                  "code": code,
+                                  "success": False,
+                                  "error": error,
+                                  "target": target}}}
+
+
 def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in FILE_SUFFIXS
