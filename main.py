@@ -148,6 +148,20 @@ def get_chat():
         return return_response({"error": str(e)}, str(e), 400)
 
 
+@app.route('/getChats', methods=['GET'])
+def get_chats():
+    try:
+        user_type = request.args.get("type")
+        user_name = request.args.get("id")
+        if user_type == "doctor":
+            data = list(MongoConfig().find_all(DB_name, COLLECTION_NAME, {"doctorId": user_name}, projection = {"_id":0, "messages":0}))
+        else:
+            data = list(MongoConfig().find_all(DB_name, COLLECTION_NAME, {"clientID": user_name}, projection = {"_id":0, "messages":0}))
+        return return_response(data, "Success", 200)
+    except Exception as e:
+        return return_response({"error": str(e)}, str(e), 400)
+
+
 @socketio.on('send_message')
 def handle_send_message_event(data):
     app.logger.info("{} has sent message to the room {}: {}".format(data['username'],
