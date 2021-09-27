@@ -23,7 +23,7 @@
 
     socket.on('connect', function () {
         socket.emit('join_room', {
-            userId: "{{ userId }}",
+            username: "{{ username }}",
             room: "{{ room }}",
             accountType: "{{ accountType }}"
         });
@@ -35,7 +35,7 @@
             let message = message_input.value.trim();
             if (message.length) {
                 socket.emit('send_message', {
-                    userId: "{{ userId }}",
+                    username: "{{ username }}",
                     room: "{{ room }}",
                     message: message
                 })
@@ -47,7 +47,7 @@
 
     window.onbeforeunload = function () {
         socket.emit('leave_room', {
-            userId: "{{ userId }}",
+            username: "{{ username }}",
             accountType: "{{ accountType }}",
             room: "{{ room }}"
         })
@@ -56,22 +56,22 @@
     socket.on('receive_message', function (data) {
         console.log(data);
         const newNode = document.createElement('div');
-        newNode.innerHTML = `<b>${data.userId}:&nbsp;</b> ${data.message}`;
+        newNode.innerHTML = `<b>${data.username}:&nbsp;</b> ${data.message}`;
         document.getElementById('messages').appendChild(newNode);
     });
 
     socket.on('join_room_announcement', function (data) {
         console.log(data);
-        if (data.userId !== "{{ userId }}") {
+        if (data.username !== "{{ username }}") {
             const newNode = document.createElement('div');
-            newNode.innerHTML = `<b>${data.userId}</b> has joined the room`;
+            newNode.innerHTML = `<b>${data.username}</b> has joined the room`;
             document.getElementById('messages').appendChild(newNode);
         }
     });
 
     socket.on('exception', function (data) {
         console.log(data);
-        if (data.userId !== "{{ userId }}") {
+        if (data.username !== "{{ username }}") {
             const newNode = document.createElement('div');
             newNode.innerHTML = `<b>${data.error}</b>`;
             document.getElementById('messages').appendChild(newNode);
@@ -81,7 +81,7 @@
     socket.on('leave_room_announcement', function (data) {
         console.log(data);
         const newNode = document.createElement('div');
-        newNode.innerHTML = `<b>${data.userId}</b> has left the room`;
+        newNode.innerHTML = `<b>${data.username}</b> has left the room`;
         document.getElementById('messages').appendChild(newNode);
     });
 
@@ -92,7 +92,7 @@
           clearTimeout(timeout);
         istyping.innerHTML = 'typing'
         timeout = setTimeout(socket.emit('typing', {
-            userId: "{{ userId }}",
+            username: "{{ username }}",
             room: "{{ room }}",
             accountType: "{{ accountType }}"
         }), 1000)
@@ -100,7 +100,7 @@
         socket.on('person_typing', function (data) {
         console.log(data);
         const newNode = document.createElement('div');
-        newNode.innerHTML = `<b>${data.userId}</b> is typing`;
+        newNode.innerHTML = `<b>${data.username}</b> is typing`;
         document.getElementById('istyping').appendChild(newNode);
     });
 

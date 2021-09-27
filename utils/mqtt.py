@@ -47,7 +47,7 @@ def on_message(client, userdata, msg):
     room_id = str(msg.topic).split("/")[-1]
     print("the message = ", json.loads(msg.payload.decode("utf-8", "ignore")))
     response = json.loads(msg.payload.decode("utf-8", "ignore"))
-    send_response(response, room_id, response.get("userId"), get_msg=True)
+    send_response(response, room_id, response.get("username"), get_msg=True)
     print("Message received-> " + msg.topic + " " + str(msg.payload))
 
 

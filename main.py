@@ -1,3 +1,4 @@
+import datetime
 import os
 import time
 from asyncio.log import logger
@@ -12,7 +13,7 @@ from utils.cache import update_chatroom_chats, get_chatroom_chats
 from utils.common import translate_message_for_mongo, upload_to_s3, return_response, allowed_file, error_message
 from utils.mongo.mongo_client import MongoConfig
 from utils.mqtt import send_response, run_mqtt
-from utils.properties import DB_name
+from utils.properties import DB_name, COLLECTION_NAME
 from utils.properties import FILE_SUFFIXS
 from flask_cors import CORS
 
@@ -46,12 +47,12 @@ def home():
 
 @app.route('/chat')
 def chat():
-    userId = request.args.get('userId')
+    username = request.args.get('username')
     room = request.args.get('room')
     account = request.args.get('accountType')
 
-    if userId and room:
-        return render_template('chat.html', userId=userId, room=room, accountType=account)
+    if username and room:
+        return render_template('chat.html', username=username, room=room, accountType=account)
     else:
         return redirect(url_for('home'))
 
@@ -60,26 +61,24 @@ def chat():
 def create_chatroom():
     if request.method == "POST":
         try:
-            room_id: str = request.form.get("chatroomId")
-            if room_id is None:
-                return return_response({}, "roomid is none", 400)
             doctor: str = request.form.get("doctorId")
             if doctor is None:
                 return return_response({}, "doctor id is none", 400)
             client: str = request.form.get("clientId")
             if client is None:
                 return return_response({}, "client id is none", 400)
+            room_id = f"{doctor}_{client}"
             if get_chatroom_chats(room_id) is not None:
                 return return_response({}, "room already exist", 200)
             else:
-                current_time = time.time()
                 to_save = {"chatroomId": room_id,
                            "doctorId": doctor,
                            "clientId": client,
-                           "createdAt": int(current_time * 1000),
+                           "createdAt": str(datetime.datetime.now()),
                            "messages": []}
                 update_chatroom_chats(room_id, to_save)
-                MongoConfig().insert(DB_name, room_id, to_save)
+                MongoConfig().insert(DB_name, COLLECTION_NAME, to_save)
+                to_save.pop("_id")
                 return return_response(to_save, "Success", code=200)
         except Exception as e:
             print(f"error due to {e}")
@@ -127,7 +126,7 @@ def update_chat():
                 chat["messages"] = messages
                 update_chatroom_chats(room_id, chat)
                 data['message'] = translate_message_for_mongo(room_id, request.form.get("message"))
-                MongoConfig().update(DB_name, room_id, {"chatroomId": room_id},
+                MongoConfig().update(DB_name, COLLECTION_NAME, {"chatroomId": room_id},
                                      {"$push": {"messages": data}})
                 return return_response({}, "message_updated", 200)
         except Exception as e:
@@ -141,7 +140,7 @@ def update_chat():
 def get_chat():
     try:
         room_id = request.args.get("chatroomId")
-        user_name = request.args.get("userId")
+        user_name = request.args.get("username")
         count: int = request.args.get("count")
         data = get_previous_chat(count, room_id, user_name)
         return return_response(data, "Success", 200)
@@ -151,7 +150,7 @@ def get_chat():
 
 @socketio.on('send_message')
 def handle_send_message_event(data):
-    app.logger.info("{} has sent message to the room {}: {}".format(data['userId'],
+    app.logger.info("{} has sent message to the room {}: {}".format(data['username'],
                                                                     data['room'],
                                                                     data['message']))
 
@@ -160,14 +159,14 @@ def handle_send_message_event(data):
             room_id: str = data.get("room")
             if room_id is None:
                 send_response(error_message("ROOM_ID MISMATCH", "SEND_MESSAGE", "room id does not exist", 400),
-                              data['room'], data['userId'])
-            sender: str = data.get("userId")
+                              data['room'], data['username'])
+            sender: str = data.get("username")
             if sender is None:
                 send_response(error_message("SENDER_ID MISMATCH", "SEND_MESSAGE", "sender id does not exist", 400),
-                              data['room'], data['userId'])
+                              data['room'], data['username'])
             chat = get_chatroom_chats(room_id)
             if chat is None:
-                chat = MongoConfig().find(DB_name, room_id, {"chatroomId": room_id})
+                chat = MongoConfig().find(DB_name, COLLECTION_NAME, {"chatroomId": room_id})
 
             if chat is not None:
                 timestamp = time.time() * 1000
@@ -179,90 +178,90 @@ def handle_send_message_event(data):
                 chat["messages"] = messages
                 update_chatroom_chats(room_id, chat)
                 temp_data['message'] = translate_message_for_mongo(room_id, data.get("message"))
-                MongoConfig().update(DB_name, room_id, {"chatroomId": room_id},
+                MongoConfig().update(DB_name, COLLECTION_NAME, {"chatroomId": room_id},
                                      {"$push": {"messages": temp_data}})
                 socketio.emit('receive_message', data, room=data['room'])
         except Exception as e:
             send_response(error_message(e.__str__(), "SEND_MESSAGE", "Something went wrong broken pipeline"),
-                          data['room'], data['userId'])
+                          data['room'], data['username'])
 
 
 @socketio.on('join_room')
 def handle_join_room_event(data):
-    app.logger.info("{} has joined the room {}".format(data['userId'], data['room'], data['accountType']))
+    app.logger.info("{} has joined the room {}".format(data['username'], data['room'], data['accountType']))
     try:
-        a = 10 / 0
         to_search = {"chatroomId": data.get("room")}
         if data['accountType'] == "doctor":
-            to_search["doctorId"] = data['userId']
+            to_search["doctorId"] = data['username']
             if to_search.get("doctorId") is not None:
-                if MongoConfig().find(DB_name, data.get("room"), to_search) is not None:
-                    MongoConfig().update(DB_name, data.get("room"),
+                if MongoConfig().find(DB_name, COLLECTION_NAME, to_search) is not None:
+                    MongoConfig().update(DB_name, COLLECTION_NAME,
                                          to_search,
                                          {"$push": {"history": {"checkIn": int(time.time() * 1000)}}})
                     join_room(data['room'])
                     socketio.emit('join_room_announcement', data, room=data['room'])
                 else:
                     send_response(error_message("ROOM_ID MISMATCH", "JOIN_ROOM", "room id does not exist", 400),
-                                  data['room'], data['userId'])
+                                  data['room'], data['username'])
                     logger.info(" room id does not exist")
         elif data['accountType'] == "client":
-            to_search["clientId"] = data['userId']
-            if MongoConfig().find(DB_name, data.get("room"), to_search) is not None:
+            to_search["clientId"] = data['username']
+            if MongoConfig().find(DB_name, COLLECTION_NAME, to_search) is not None:
                 join_room(data['room'])
                 socketio.emit('join_room_announcement', data, room=data['room'])
             else:
                 send_response(error_message("ROOM_ID MISMATCH", "JOIN_ROOM", "room id does not exist", 400),
-                              data['room'], data['userId'])
+                              data['room'], data['username'])
                 logger.info(" room id does not exist")
         else:
             send_response(error_message("ACCOUNT TYPE MISMATCH", "JOIN_ROOM", "accountType does not match", 400),
-                          data['room'], data['userId'])
+                          data['room'], data['username'])
             logger.info("accountType does not match")
     except Exception as e:
-        send_response(error_message(e.__str__(), "JOIN_ROOM", "Something went wrong broken pipeline"), data['room'])
+        send_response(error_message(e.__str__(), "JOIN_ROOM", "Something went wrong broken pipeline"), data['room'], data['username'])
 
 
 @socketio.on('typing')
 def handle_join_room_event(data):
-    app.logger.info("{} is typing in room {}".format(data['userId'], data['room'], data['accountType']))
-    if MongoConfig().find(DB_name, data.get("room"), {"chatroomId": data.get("room")}) is not None:
+    app.logger.info("{} is typing in room {}".format(data['username'], data['room'], data['accountType']))
+    if MongoConfig().find(DB_name, COLLECTION_NAME, {"chatroomId": data.get("room")}) is not None:
         socketio.emit('person_typing', data, room=data['room'])
     else:
-        send_response(error_message("ROOM_ID MISMATCH", "TYPING", "room does not exist", 400), data['room'], data['userId'])
+        send_response(error_message("ROOM_ID MISMATCH", "TYPING", "room does not exist", 400), data['room'],
+                      data['username'])
         logger.info("room does not exist")
 
 
 @socketio.on('leave_room')
 def handle_leave_room_event(data):
-    app.logger.info("{} has left the room {}".format(data['userId'], data['room'], data['accountType']))
+    app.logger.info("{} has left the room {}".format(data['username'], data['room'], data['accountType']))
     try:
         print("leave room")
         to_search = {"chatroomId": data.get("room")}
         if data['accountType'] == "doctor":
-            to_search["doctorId"] = data['userId']
+            to_search["doctorId"] = data['username']
             if to_search.get("doctorId") is not None:
-                if MongoConfig().find(DB_name, data.get("room"), to_search) is not None:
-                    MongoConfig().update(DB_name, data.get("room"), to_search,
+                if MongoConfig().find(DB_name, COLLECTION_NAME, to_search) is not None:
+                    MongoConfig().update(DB_name, COLLECTION_NAME, to_search,
                                          {"$push": {"history": {"checkOut": int(time.time() * 1000)}}})
                     leave_room(data['room'])
                     socketio.emit('leave_room_announcement', data, room=data['room'])
                 else:
                     send_response(error_message("ROOM_ID MISMATCH", "LEAVE_ROOM", "room id does not exist", 400),
-                                  data['room'], data['userId'])
+                                  data['room'], data['username'])
                     logger.info(" room id does not exist")
         elif data['accountType'] == "client":
-            to_search["clientId"] = data['userId']
-            if MongoConfig().find(DB_name, data.get("room"), to_search) is not None:
+            to_search["clientId"] = data['username']
+            if MongoConfig().find(DB_name, COLLECTION_NAME, to_search) is not None:
                 leave_room(data['room'])
                 socketio.emit('leave_room_announcement', data, room=data['room'])
             else:
                 send_response(error_message("ROOM_ID MISMATCH", "LEAVE_ROOM", "room id does not exist", 400),
-                              data['room'], data['userId'])
+                              data['room'], data['username'])
                 logger.info("room id does not exist")
         else:
             send_response(error_message("ACCOUNT TYPE MISMATCH", "LEAVE_ROOM", "accountType does not match", 400),
-                          data['room'], data['userId'])
+                          data['room'], data['username'])
             logger.info("accountType does not match")
     except Exception as e:
         send_response(error_message(e.__str__(), "LEAVE_ROOM", "Something went wrong broken pipeline"), data['room'])
